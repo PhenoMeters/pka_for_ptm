@@ -24,12 +24,12 @@ already_made_data = pd.read_csv(already_made)
 already_made_data = np.array(already_made_data.iloc[:,0])
 already_made_array = []
 for i in already_made_data:
-    to_add = np.array(i.split("-"))[1]
+    to_add = np.array(i.split("-"))[1] + '-' + np.array(i.split("-"))[2]
     already_made_array.append(to_add)
 all_data = np.array(os.listdir(all_data_dir))
 to_run = []
 for i in all_data:
-    to_add = np.array(i.split("-"))[1]
+    to_add = np.array(i.split("-"))[1] + '-' + np.array(i.split("-"))[2]
     to_run.append(to_add)
 to_run = pd.DataFrame({"to_run":to_run})
 already_made_array = pd.DataFrame({"already_made_array":already_made_array})

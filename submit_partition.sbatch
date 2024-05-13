@@ -18,6 +18,6 @@ module load python/miniconda23.3.1
 source /share/apps/python/miniconda23.3.1/etc/profile.d/conda.sh
 conda activate /qfs/projects/proteometer/pypka_conda
 
-python partition_uniprot_csv.py /people/imal967/ppi/smaller_sandbox /rcfs/projects/proteometer/smaller_test 5 /rcfs/projects/proteometer/already.csv
+python partition_uniprot_csv.py /people/imal967/ppi/sandbox /rcfs/projects/proteometer/alphafold_db 50 /rcfs/projects/proteometer/already_made.csv
 
 
