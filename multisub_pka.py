@@ -1,57 +1,67 @@
-import os, shutil, sys
+import os
+import sys
 import glob
 from pathlib import Path
+import pandas as pd
 
 name = "multisub_pka"
 
 account = "proteometer"
-time = "72:00:00" 
-time = "4-0" 
-queque = "shared"
+time = "4-0"
+queque = "slurm"
 node = '1'
 core = "64" 
-out = "out_"
-err = "err_"
-mail = "alexandria.im@pnnl.gov" # will send a email once finished or terminated or failed
+out = "out"
+err = "err"
+mail = "song.feng@pnnl.gov"  # will send a email once finished or terminated or failed
 modules = ["gcc/7.5.0", "python/miniconda23.3.1"]
 extras = [
-        "source /share/apps/python/miniconda23.3.1/etc/profile.d/conda.sh", 
+        "source /share/apps/python/miniconda23.3.1/etc/profile.d/conda.sh",
         "conda activate /qfs/projects/proteometer/pypka_conda",
         "export PATH=/qfs/projects/proteometer/pypka_conda/bin:$PATH",
         ]
 
-workdir = "/people/imal967/ppi/sandbox"
-pka_result_dir = "/rcfs/projects/proteometer/pka_db/"
-pyscript_file = "/people/imal967/git_repos/ProCaliper-example/pypka_script_chunk.py"
+pyscript_file = "/qfs/projects/proteometer/pka_for_ptm/pypka_script_chunk.py"
 
-slurm_template = "#!/bin/sh\n#SBATCH -A {}\n#SBATCH -t {}\n#SBATCH -N {}\n#SBATCH --cpus-per-task={}\n#SBATCH -p {}".format(account, time, node, core, queque)
+AF_structure_dir = os.path.abspath(sys.argv[1])
+AF_pka_dir = os.path.abspath(sys.argv[2])
+work_dir = os.path.abspath(sys.argv[3])
+chunk_num = int(sys.argv[4])
+# current_dir = os.getcwd()
+# pyscript_file_ori = os.path.join(current_dir, "pypka_script_chunk.py")
 
-uniprot_name_files = glob.glob(workdir + "/uniprot4pka*")
+structure_names = [Path(file_path).stem for file_path in glob.glob(AF_structure_dir + "/*.pdb")]
+pka_names = [Path(file_path).stem for file_path in glob.glob(AF_pka_dir + "/*.csv")]
 
-for input_dir in uniprot_name_files:
+names2anlayze = list(set(structure_names) - set(pka_names))
 
-    ## Create subwork dir if not exist
-    sub_dir = input_dir
-    sub_file_name = sub_dir.split("/")[-1]
-    full_file_dir = input_dir + "/" + sub_file_name +".csv"
-    command = "cp " + pyscript_file + " " + sub_dir 
-    os.system(command)
-    
+slurm_template = f"#!/bin/sh\n#SBATCH -A {account}\n#SBATCH -t {time}\n#SBATCH -N {node}\n#SBATCH --cpus-per-task={core}\n#SBATCH -p {queque}"
+
+for i in range(chunk_num):
+    chunk_name = f"uniprot4pka_{i}"
+    pdb_list_filename = f"{chunk_name}.csv"
+    work_dir_i = f"{work_dir}/{chunk_name}"
+    os.system(f"mkdir {work_dir_i}")
+    new_pyscript_file = os.path.join(work_dir_i, os.path.basename(pyscript_file))
+    os.system(f"cp {pyscript_file} {new_pyscript_file}")
+    files2analyze = [os.path.join(AF_structure_dir, name + ".pdb") for name in names2anlayze[i::chunk_num]]
+    files2analyze = pd.DataFrame({"pdb_path": files2analyze})
+    pdb_list_filepath = os.path.join(work_dir_i, pdb_list_filename)
+    files2analyze.to_csv(pdb_list_filepath)
+    # create slurm script
     slurm = [slurm_template]
-    slurm.append("\n#SBATCH -o {}{}.txt\n#SBATCH -e {}{}.txt\n#SBATCH --mail-user={}\n#SBATCH --mail-type END\n \nmodule purge\n".format(out, sub_file_name, err, sub_file_name, mail))
+    slurm.append(f"\n#SBATCH -o {out}_{pdb_list_filename}.txt\n#SBATCH -e {err}_{pdb_list_filename}.txt\n#SBATCH --mail-user={mail}\n#SBATCH --mail-type END\n \nmodule purge\n")
     for module in modules:
-        slurm.append("module load {}\n\n".format(module))
+        slurm.append(f"module load {module}\n\n")
     for extra in extras:
-        slurm.append("{}\n".format(extra))
-    slurm.append("cd {}\n\n".format(sub_dir))
+        slurm.append(f"{extra}\n")
+    slurm.append(f"cd {work_dir_i}\n\n")
 
-    slurm.append("python {} {} {} {}\n".format(pyscript_file, core, full_file_dir, pka_result_dir))
+    slurm.append(f"python {new_pyscript_file} {core} {pdb_list_filepath} {AF_pka_dir}\n")
 
-    filename = "{}/{}.sbatch".format(sub_dir, sub_dir.split("/")[-1])
-    print(filename)
-    with open(filename, 'w') as sbatch:
+    slurm_filename = f"{work_dir_i}/{chunk_name}.sbatch"
+    print(slurm_filename)
+    with open(slurm_filename, 'w') as sbatch:
         sbatch.write(''.join(slurm))
-
-    ### Before uncommenting the following, try to run this script and check if some of the slurm script are generated correctly.
-    submission = "sbatch {}".format(filename) 
+    submission = "sbatch {}".format(slurm_filename) 
     os.system(submission)
