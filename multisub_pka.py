@@ -8,7 +8,7 @@ name = "multisub_pka"
 
 account = "proteometer"
 time = "4-0"
-queque = "slurm"
+queue = "slurm"
 node = '1'
 core = "64"
 out = "out"
